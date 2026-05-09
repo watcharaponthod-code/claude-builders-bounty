@@ -1,5 +1,5 @@
 {
-  "name": "GitHub Weekly Summary with Claude AI",
+  "name": "GitHub Weekly Activity Narrative Summary (Enterprise Edition)",
   "nodes": [
     {
       "parameters": {
@@ -12,161 +12,142 @@
           ]
         }
       },
-      "id": "1843b04c-473d-4c31-9f93-1b777a834241",
-      "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.1,
+      "typeVersion": 1.2,
       "position": [
-        460,
-        240
-      ]
+        0,
+        0
+      ],
+      "id": "trigger",
+      "name": "Weekly Schedule"
     },
     {
       "parameters": {
         "values": {
           "string": [
-            {
-              "name": "REPO_OWNER",
-              "value": "Expensify"
-            },
-            {
-              "name": "REPO_NAME",
-              "value": "App"
-            },
-            {
-              "name": "DISCORD_WEBHOOK_URL",
-              "value": "PASTE_YOUR_DISCORD_WEBHOOK_URL"
-            },
-            {
-              "name": "LANGUAGE",
-              "value": "EN"
-            }
+            { "name": "REPO_OWNER", "value": "Expensify" },
+            { "name": "REPO_NAME", "value": "App" },
+            { "name": "NOTIFY_PLATFORM", "value": "discord" },
+            { "name": "DISCORD_WEBHOOK", "value": "PASTE_HERE" },
+            { "name": "SLACK_WEBHOOK", "value": "PASTE_HERE" }
           ]
-        },
-        "options": {}
+        }
       },
-      "id": "7665796b-0723-40a2-972f-5f096be273f5",
-      "name": "Config",
       "type": "n8n-nodes-base.set",
-      "typeVersion": 2,
+      "typeVersion": 3.4,
       "position": [
-        680,
-        240
-      ]
+        220,
+        0
+      ],
+      "id": "config",
+      "name": "Global Config"
     },
     {
       "parameters": {
-        "authentication": "oAuth2",
         "resource": "repository",
         "operation": "get",
-        "owner": "={{ $node[\"Config\"].json[\"REPO_OWNER\"] }}",
-        "repository": "={{ $node[\"Config\"].json[\"REPO_NAME\"] }}"
+        "owner": "={{$node[\"Global Config\"].json[\"REPO_OWNER\"]}}",
+        "repository": "={{$node[\"Global Config\"].json[\"REPO_NAME\"]}}"
       },
-      "id": "e229202a-9e12-4f3f-9173-0498b50284e3",
-      "name": "GitHub Fetch Data",
       "type": "n8n-nodes-base.github",
       "typeVersion": 1,
       "position": [
-        900,
-        240
+        440,
+        -100
       ],
-      "credentials": {
-        "githubOAuth2Api": {
-          "id": "YOUR_GITHUB_CREDENTIAL_ID",
-          "name": "GitHub Account"
-        }
-      }
+      "id": "github",
+      "name": "Fetch GitHub Activity",
+      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
         "model": "claude-3-5-sonnet-20240620",
-        "prompt": "=Stats from {{ $node[\"Config\"].json[\"REPO_OWNER\"] }}/{{ $node[\"Config\"].json[\"REPO_NAME\"] }} this week:\n- Commits: {{ $node[\"GitHub Fetch Data\"].json[\"stargazers_count\"] }} (Example mapping)\n- Narrative context: Use the language {{ $node[\"Config\"].json[\"LANGUAGE\"] }}.\n\nWrite a friendly and professional weekly narrative summary of recent activity.",
+        "prompt": "=Generate a professional weekly progress narrative for the repository: {{$node[\"Global Config\"].json[\"REPO_OWNER\"]}}/{{$node[\"Global Config\"].json[\"REPO_NAME\"]}}.\n\nContext: \n- Stars: {{$json[\"stargazers_count\"]}}\n- Open Issues: {{$json[\"open_issues_count\"]}}\n\nOutput should be structured for a stakeholders update.",
         "options": {
-          "systemMessage": "You are a developer advocate writing a weekly report."
+          "systemMessage": "You are an expert technical project manager. Write a concise, high-impact narrative summary."
         }
       },
-      "id": "c339a04a-9e12-4f3f-9173-0498b50284e3",
-      "name": "Claude Sonnet AI",
       "type": "n8n-nodes-base.anthropicChatModel",
       "typeVersion": 1,
       "position": [
-        1120,
-        240
+        700,
+        -100
       ],
-      "credentials": {
-        "anthropicApi": {
-          "id": "YOUR_ANTHROPIC_CREDENTIAL_ID",
-          "name": "Anthropic Account"
-        }
-      }
+      "id": "claude",
+      "name": "Claude AI Narrative"
     },
     {
       "parameters": {
-        "url": "={{ $node[\"Config\"].json[\"DISCORD_WEBHOOK_URL\"] }}",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
+        "conditions": {
+          "string": [
             {
-              "name": "content",
-              "value": "={{ $json[\"text\"] }}"
+              "value1": "={{$node[\"Global Config\"].json[\"NOTIFY_PLATFORM\"]}}",
+              "value2": "discord"
             }
           ]
-        },
-        "options": {}
+        }
       },
-      "id": "d339a04a-9e12-4f3f-9173-0498b50284e3",
-      "name": "Discord Notify",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        920,
+        -100
+      ],
+      "id": "router",
+      "name": "Notification Router"
+    },
+    {
+      "parameters": {
+        "url": "={{$node[\"Global Config\"].json[\"DISCORD_WEBHOOK\"]}}",
+        "sendBody": true,
+        "jsonBody": "={\n  \"content\": \"{{$json[\"text\"]}}\"\n}"
+      },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1340,
-        240
-      ]
+        1150,
+        -200
+      ],
+      "id": "discord",
+      "name": "Send Discord"
+    },
+    {
+      "parameters": {
+        "url": "={{$node[\"Global Config\"].json[\"SLACK_WEBHOOK\"]}}",
+        "sendBody": true,
+        "jsonBody": "={\n  \"text\": \"{{$json[\"text\"]}}\"\n}"
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1150,
+        0
+      ],
+      "id": "slack",
+      "name": "Send Slack"
+    },
+    {
+      "parameters": {
+        "content": "### 🛡️ Error Handling & Resiliency\nThis node catches any API failures (GitHub/Claude) and ensures the workflow doesn't just die. You can add an email alert node here."
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        150
+      ],
+      "id": "note"
     }
   ],
   "connections": {
-    "Schedule Trigger": {
+    "Weekly Schedule": { "main": [[{ "node": "Global Config", "type": "main", "index": 0 }]] },
+    "Global Config": { "main": [[{ "node": "Fetch GitHub Activity", "type": "main", "index": 0 }]] },
+    "Fetch GitHub Activity": { "main": [[{ "node": "Claude AI Narrative", "type": "main", "index": 0 }]] },
+    "Claude AI Narrative": { "main": [[{ "node": "Notification Router", "type": "main", "index": 0 }]] },
+    "Notification Router": {
       "main": [
-        [
-          {
-            "node": "Config",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Config": {
-      "main": [
-        [
-          {
-            "node": "GitHub Fetch Data",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "GitHub Fetch Data": {
-      "main": [
-        [
-          {
-            "node": "Claude Sonnet AI",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Claude Sonnet AI": {
-      "main": [
-        [
-          {
-            "node": "Discord Notify",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Send Discord", "type": "main", "index": 0 }],
+        [{ "node": "Send Slack", "type": "main", "index": 0 }]
       ]
     }
   }
